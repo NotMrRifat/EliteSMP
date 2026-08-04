@@ -1,8 +1,12 @@
 {
-  "name": "aternos-telegram-bot",
-  "version": "1.0.0",
+  "name": "aternos-telegram-control-bot",
+  "version": "2.1.0",
+  "description": "Public Vercel-ready Telegram control layer for an Aternos Minecraft server.",
   "main": "api/bot.js",
-  "dependencies": {
-    "node-fetch": "^2.6.7"
+  "scripts": {
+    "start": "vercel dev"
+  },
+  "engines": {
+    "node": "22.x"
   }
 }

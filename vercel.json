@@ -1,9 +1,13 @@
 {
   "version": 2,
-  "routes": [
+  "functions": {
+    "api/bot.js": { "maxDuration": 60 },
+    "api/cron.js": { "maxDuration": 60 }
+  },
+  "crons": [
     {
-      "src": "/api/bot",
-      "dest": "api/bot.js"
+      "path": "/api/cron",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
