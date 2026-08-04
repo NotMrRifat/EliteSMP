@@ -1,0 +1,9 @@
+{
+  "name": "aternos-telegram-bot",
+  "version": "1.0.0",
+  "main": "api/bot.js",
+  "dependencies": {
+    "aternos-api": "^1.3.0",
+    "node-fetch": "^2.6.7"
+  }
+}
