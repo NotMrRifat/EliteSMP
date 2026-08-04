@@ -1,14 +1,25 @@
-const ADMIN_ID = String(process.env.ADMIN_ID || "");
+const ADMIN_ID = String(process.env.ADMIN_ID || "").trim();
 const ALLOWED_USERS = (process.env.ALLOWED_USERS || "")
-  .split(",").map(x => x.trim()).filter(Boolean);
+  .split(",")
+  .map(x => x.trim())
+  .filter(Boolean);
 
 function isAdmin(id) {
-  return String(id) === ADMIN_ID;
+  if (!id || !ADMIN_ID) return false;
+  return String(id).trim() === ADMIN_ID;
 }
 
 function isAllowed(id) {
-  const s = String(id);
-  return isAdmin(s) || ALLOWED_USERS.includes(s);
+  if (!id) return false;
+  const s = String(id).trim();
+  if (isAdmin(s)) return true;
+  if (ALLOWED_USERS.length === 0) return false;
+  return ALLOWED_USERS.includes(s);
 }
 
-module.exports = { isAdmin, isAllowed };
+module.exports = {
+  isAdmin,
+  isAllowed,
+  ADMIN_ID,
+  ALLOWED_USERS
+};

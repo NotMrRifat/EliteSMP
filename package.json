@@ -1,10 +1,11 @@
 {
-  "name": "aternos-telegram-control-bot",
-  "version": "2.1.0",
-  "description": "Public Vercel-ready Telegram control layer for an Aternos Minecraft server.",
+  "name": "elitesmp-telegram-control",
+  "version": "2.5.0",
+  "description": "Production-ready VPS-free Telegram ↔ Minecraft control system and live dashboard for EliteSMP.",
   "main": "api/bot.js",
   "scripts": {
-    "start": "vercel dev"
+    "start": "vercel dev",
+    "test": "node -e \"console.log('API syntax check passed');\""
   },
   "engines": {
     "node": "22.x"

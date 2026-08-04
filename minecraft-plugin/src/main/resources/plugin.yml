@@ -1,0 +1,6 @@
+name: EliteTelegramBridge
+version: 1.0.0
+main: eu.elitesmp.telegrambridge.EliteTelegramBridge
+api-version: '1.20'
+author: NotMrRifat
+description: Production-ready Telegram bridge for EliteSMP Minecraft Server

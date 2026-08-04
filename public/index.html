@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EliteSMP — Minecraft Control Center & Live Dashboard</title>
+  <meta name="description" content="Production-ready live dashboard and control system for EliteSMP Minecraft Server.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="background-glow"></div>
+  
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <div class="logo-icon">🏰</div>
+        <div>
+          <h1 class="brand-title">EliteSMP</h1>
+          <p class="brand-subtitle">Minecraft Live Control & Monitoring</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div id="status-badge" class="badge badge-unknown">
+          <span class="dot"></span>
+          <span id="status-text">CONNECTING...</span>
+        </div>
+        <button id="btn-admin-auth" class="btn btn-outline" title="Admin Login">
+          <span class="btn-icon">🔐</span> Admin Mode
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Grid -->
+    <main class="dashboard-grid">
+      <!-- Status Card -->
+      <section class="card hero-card">
+        <div class="card-header">
+          <h2>📊 Server Metrics</h2>
+          <button id="btn-refresh" class="btn btn-icon-only" title="Refresh Live Data">🔄</button>
+        </div>
+        <div class="metrics-grid">
+          <div class="metric-box">
+            <span class="metric-label">Online Players</span>
+            <div class="metric-value" id="metric-players">--/--</div>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Server Address</span>
+            <div class="metric-value code-value" id="metric-address">play.elitesmp.com</div>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">Uptime</span>
+            <div class="metric-value" id="metric-uptime">--</div>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">TPS / Health</span>
+            <div class="metric-value" id="metric-tps">20.0</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Active Players Card -->
+      <section class="card players-card">
+        <div class="card-header">
+          <h2>👥 Active Players</h2>
+          <span class="badge badge-count" id="player-count-badge">0 Online</span>
+        </div>
+        <div class="player-list-container" id="player-list">
+          <div class="empty-state">
+            <p>Fetching active player list...</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Admin Panel (Conditional / Passkey protected) -->
+      <section class="card admin-card hidden" id="admin-panel">
+        <div class="card-header">
+          <h2>⚡ Admin Command Center</h2>
+          <span class="badge badge-admin">AUTHENTICATED</span>
+        </div>
+
+        <div class="admin-grid">
+          <!-- Announcement Form -->
+          <div class="admin-box">
+            <h3>📢 Broadcast In-Game Announcement</h3>
+            <form id="form-announce">
+              <div class="input-group">
+                <input type="text" id="announce-input" placeholder="e.g. Event starting in spawn in 5 minutes!" required>
+                <button type="submit" class="btn btn-primary">Broadcast</button>
+              </div>
+            </form>
+            <div id="announce-output" class="output-msg"></div>
+          </div>
+
+          <!-- Console Command Execution -->
+          <div class="admin-box">
+            <h3>💻 Minecraft Console Command</h3>
+            <form id="form-cmd">
+              <div class="input-group">
+                <input type="text" id="cmd-input" placeholder="e.g. time set day or give player diamond 1" required>
+                <button type="submit" class="btn btn-warning">Execute</button>
+              </div>
+            </form>
+            <div id="cmd-output" class="output-console"></div>
+          </div>
+        </div>
+
+        <!-- Activity Logs -->
+        <div class="logs-section">
+          <h3>📜 Audit Activity Logs</h3>
+          <div class="logs-container" id="logs-container">
+            <p class="empty-state">No logs loaded yet.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>EliteSMP Control System &bull; VPS-Free Telegram Serverless Bridge &bull; Developed by <a href="https://github.com/NotMrRifat" target="_blank" rel="noopener">@NotMrRifat</a></p>
+    </footer>
+  </div>
+
+  <!-- Admin Auth Modal -->
+  <div class="modal-overlay hidden" id="auth-modal">
+    <div class="modal">
+      <h2>🔐 Admin Authentication</h2>
+      <p>Enter your <code>WEB_ADMIN_KEY</code> or <code>MC_BRIDGE_KEY</code> to access admin controls.</p>
+      <form id="form-auth">
+        <input type="password" id="auth-key-input" placeholder="Enter admin key..." required>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" id="btn-close-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Authenticate</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
