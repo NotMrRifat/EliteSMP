@@ -8,6 +8,7 @@ port: 8080
 bridge-key: "change_me_to_your_secure_bridge_key"
 
 # Vercel Webhook URL for dispatching real-time player/server events to Telegram
+# (Vercel Hobby compatible — replaces 5-minute cron polling with event-driven webhooks)
 vercel-events-url: "https://elitesmp.vercel.app/api/events"
 
 # Enable/disable sending player join/leave & server status events to Vercel

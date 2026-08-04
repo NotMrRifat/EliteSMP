@@ -11,13 +11,17 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class EventListener implements Listener {
 
     private final EliteTelegramBridge plugin;
     private final String webhookUrl;
     private final String bridgeKey;
+    private final Map<String, Long> lastEventTimeMap = new ConcurrentHashMap<>();
+    private static final long DUP_THROTTLE_MS = 3000;
 
     public EventListener(EliteTelegramBridge plugin, String webhookUrl, String bridgeKey) {
         this.plugin = plugin;
@@ -59,6 +63,15 @@ public class EventListener implements Listener {
         if (webhookUrl == null || webhookUrl.isEmpty() || !webhookUrl.startsWith("http")) {
             return;
         }
+
+        String eventKey = type + ":" + (player != null ? player : "server");
+        long now = System.currentTimeMillis();
+        Long lastTime = lastEventTimeMap.get(eventKey);
+        if (lastTime != null && (now - lastTime) < DUP_THROTTLE_MS) {
+            // Throttled duplicate event within 3 seconds
+            return;
+        }
+        lastEventTimeMap.put(eventKey, now);
 
         try {
             URL url = new URL(webhookUrl);
