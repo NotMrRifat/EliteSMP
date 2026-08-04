@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "api/bot.js",
   "dependencies": {
-    "aternos-api": "github:szfun/aternos-api",
+    "aternos-api": "git+https://github.com/szfun/aternos-api.git",
     "node-fetch": "^2.6.7"
   }
 }
