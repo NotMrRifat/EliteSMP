@@ -123,18 +123,24 @@ module.exports = async (req, res) => {
   const body = req.body || {};
   let chatId, senderName, text, isCallback = false, callbackId = null, messageId = null;
 
-  // Extract Telegram Payload
+  // Extract Telegram Payload & User Identification (Prefer Username over Name/UID)
   if (body.callback_query) {
     isCallback = true;
     callbackId = body.callback_query.id;
     chatId = String(body.callback_query.message.chat.id);
     messageId = body.callback_query.message.message_id;
-    senderName = body.callback_query.from.first_name || "User";
+    
+    const user = body.callback_query.from;
+    senderName = user.username ? `@${user.username}` : (user.first_name || "User");
+    
     text = body.callback_query.data;
     await callTelegram('answerCallbackQuery', { callback_query_id: callbackId });
   } else if (body.message) {
     chatId = String(body.message.chat.id);
-    senderName = body.message.from.first_name || "User";
+    
+    const user = body.message.from;
+    senderName = user.username ? `@${user.username}` : (user.first_name || "User");
+    
     text = body.message.text ? body.message.text.trim() : "";
   } else {
     return res.status(200).send('OK');
