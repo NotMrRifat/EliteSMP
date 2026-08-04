@@ -1,4 +1,4 @@
-const Client = require('aternos-api-wrapper');
+const { Client } = require('aternos-api-wrapper');
 const fetch = require('node-fetch');
 
 // Environment Variables
@@ -6,9 +6,11 @@ const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN;
 const ATERNOS_USER = process.env.ATERNOS_USER;
 const ATERNOS_PASS = process.env.ATERNOS_PASS;
 
-const ADMIN_ID = String(process.env.ADMIN_ID);
-const ALLOWED_USERS = process.env.ALLOWED_USERS ? process.env.ALLOWED_USERS.split(',').map(id => id.trim()) : [];
-const SERVER_NAME = process.env.SERVER_NAME || "Minecraft SMP"; // Env variable for dynamic server/world name
+const ADMIN_ID = String(process.env.ADMIN_ID || "");
+const ALLOWED_USERS = process.env.ALLOWED_USERS 
+  ? process.env.ALLOWED_USERS.split(',').map(id => id.trim()) 
+  : [];
+const SERVER_NAME = process.env.SERVER_NAME || "Minecraft SMP";
 
 // Fixed Developer Information
 const DEVELOPER_INFO = {
@@ -16,13 +18,13 @@ const DEVELOPER_INFO = {
   role: "Full Stack Developer, AI Automation Engineer & Bot Specialist",
   username: "@NotMrRifat",
   website: "https://omarfaruk.eu.cc/",
-  socialHandle: "@NotMrRifat" // Standard handle for FB, Insta, Telegram
+  socialHandle: "@NotMrRifat"
 };
 
-// In-Memory Store for message tracking
+// In-Memory Store for user interaction states
 const userStates = {}; 
 
-// Telegram API Helper Function
+// Helper Function: Telegram API Request Handler
 async function callTelegram(method, payload) {
   try {
     const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/${method}`, {
@@ -56,7 +58,7 @@ async function editMsg(chatId, messageId, text, replyMarkup = null) {
   });
 }
 
-// Broadcast Message Function
+// Helper Function: Broadcast Message to Whitelisted Users & Admin
 async function broadcastToAll(text, excludeChatId = null) {
   const recipients = Array.from(new Set([ADMIN_ID, ...ALLOWED_USERS]));
   for (const id of recipients) {
@@ -66,7 +68,18 @@ async function broadcastToAll(text, excludeChatId = null) {
   }
 }
 
-// Main Menu (English Buttons)
+// Helper Function: Get Aternos Server Instance
+async function getAternosServer() {
+  const aternos = new Client();
+  await aternos.login(ATERNOS_USER, ATERNOS_PASS);
+  const servers = await aternos.getServers();
+  if (!servers || servers.length === 0) {
+    throw new Error("No Minecraft servers found in this Aternos account.");
+  }
+  return servers[0];
+}
+
+// Main Menu Keyboards
 function getMainMenu(isAdmin) {
   const keyboard = [
     [
@@ -103,12 +116,14 @@ function getAdminMenu() {
 }
 
 module.exports = async (req, res) => {
-  if (req.method !== 'POST') return res.status(200).send('Bot Running!');
+  if (req.method !== 'POST') {
+    return res.status(200).send('Bot Status: Running Successfully!');
+  }
 
-  const body = req.body;
-  
+  const body = req.body || {};
   let chatId, senderName, text, isCallback = false, callbackId = null, messageId = null;
 
+  // Extract Telegram Payload
   if (body.callback_query) {
     isCallback = true;
     callbackId = body.callback_query.id;
@@ -125,7 +140,7 @@ module.exports = async (req, res) => {
     return res.status(200).send('OK');
   }
 
-  const isAdmin = chatId === ADMIN_ID;
+  const isAdmin = (chatId === ADMIN_ID);
   const isAllowed = ALLOWED_USERS.includes(chatId) || isAdmin;
 
   // 1. Access Control Check
@@ -135,13 +150,16 @@ module.exports = async (req, res) => {
     return res.status(200).send('OK');
   }
 
-  // 2. User Input State Check
-  if (userStates[chatId]) {
+  // 2. User Input State Handler (For Broadcast Messaging)
+  if (userStates[chatId] && !isCallback) {
     const state = userStates[chatId];
     delete userStates[chatId];
 
     if (state === 'WAITING_USER_BROADCAST' || state === 'WAITING_ADMIN_BROADCAST') {
-      const prefix = state === 'WAITING_ADMIN_BROADCAST' ? `📢 <b>[Admin Announcement - ${SERVER_NAME}]</b>` : `✉️ <b>[Player Message - ${SERVER_NAME}]</b>`;
+      const prefix = (state === 'WAITING_ADMIN_BROADCAST')
+        ? `📢 <b>[Admin Announcement - ${SERVER_NAME}]</b>`
+        : `✉️ <b>[Player Message - ${SERVER_NAME}]</b>`;
+      
       const broadcastContent = `${prefix}\n<b>Sender:</b> ${senderName}\n\n💬 "${text}"`;
       
       await broadcastToAll(broadcastContent, chatId);
@@ -150,7 +168,9 @@ module.exports = async (req, res) => {
     }
   }
 
-  // 3. Command and Callback Handling
+  // 3. Command and Callback Dispatcher
+
+  // --- /start or /menu or Main Menu Button ---
   if (text === '/start' || text === '/menu' || text === 'cmd_main_menu') {
     const msg = `👋 <b>হ্যালো ${senderName}!</b>\n<b>${SERVER_NAME}</b> কন্ট্রোল প্যানেলে স্বাগতম।\n\n👨‍💻 <b>Developer:</b> ${DEVELOPER_INFO.username}\n🌐 <b>Website:</b> ${DEVELOPER_INFO.website}\n\nনিচের বাটন বা কুইক কমান্ড ব্যবহার করে সার্ভার ম্যানেজ করুন:`;
     if (isCallback) {
@@ -178,7 +198,7 @@ module.exports = async (req, res) => {
     }
   }
 
-  // --- Admin Panel ---
+  // --- Admin Panel (/admin or Button) ---
   else if (text === '/admin' || text === 'cmd_admin_panel') {
     if (!isAdmin) {
       await sendMsg(chatId, "❌ <b>Permission Denied!</b> শুধুমাত্র এডমিন এই প্যানেল ব্যবহার করতে পারবে।");
@@ -192,7 +212,7 @@ module.exports = async (req, res) => {
     }
   }
 
-  // --- Start Server ---
+  // --- Start Server (/startserver or Button) ---
   else if (text === '/startserver' || text === 'cmd_startserver') {
     let activeMsgId = messageId;
     if (!isCallback) {
@@ -203,12 +223,12 @@ module.exports = async (req, res) => {
     }
 
     try {
-      const aternos = new Client();
-      await aternos.login(ATERNOS_USER, ATERNOS_PASS);
-      const servers = await aternos.getServers();
-      const server = servers[0];
+      const server = await getAternosServer();
 
-      await editMsg(chatId, activeMsgId, `⏳ <b>সার্ভার স্টার্ট হচ্ছে...</b>\n<b>${SERVER_NAME}</b> চালু হতে কিছুক্ষণ সময় লাগতে পারে, অনুগ্রহ করে অপেক্ষা করুন।`);
+      if (activeMsgId) {
+        await editMsg(chatId, activeMsgId, `⏳ <b>সার্ভার স্টার্ট হচ্ছে...</b>\n<b>${SERVER_NAME}</b> চালু হতে কিছুক্ষণ সময় লাগতে পারে, অনুগ্রহ করে অপেক্ষা করুন।`);
+      }
+
       await server.start();
 
       const successMenu = {
@@ -218,16 +238,25 @@ module.exports = async (req, res) => {
         ]
       };
 
-      await editMsg(chatId, activeMsgId, `✅ <b>${SERVER_NAME} সার্ভার সফলভাবে চালু করার কমান্ড দেওয়া হয়েছে!</b>\n\nসবাইকে গেমের কথা জানাতে নিচের <b>Send Message</b> বাটনে ক্লিক করতে পারেন।`, successMenu);
+      if (activeMsgId) {
+        await editMsg(chatId, activeMsgId, `✅ <b>${SERVER_NAME} সার্ভার সফলভাবে চালু করার কমান্ড দেওয়া হয়েছে!</b>\n\nসবাইকে গেমের কথা জানাতে নিচের <b>Send Message</b> বাটনে ক্লিক করতে পারেন।`, successMenu);
+      } else {
+        await sendMsg(chatId, `✅ <b>${SERVER_NAME} সার্ভার সফলভাবে চালু করার কমান্ড দেওয়া হয়েছে!</b>\n\nসবাইকে গেমের কথা জানাতে নিচের <b>Send Message</b> বাটনে ক্লিক করতে পারেন।`, successMenu);
+      }
 
       await broadcastToAll(`🚀 <b>${SERVER_NAME} Update</b>\n\n<b>${senderName}</b> সার্ভার চালু করার প্রসেস শুরু করেছে! কিছুক্ষণের মধ্যে সার্ভার অনলাইন হবে।`, chatId);
 
     } catch (err) {
-      await editMsg(chatId, activeMsgId, `❌ <b>ব্যর্থ হয়েছে!</b>\nত্রুটি: ${err.message || 'কানেক্ট করা সম্ভব হয়নি'}`);
+      const errMsg = `❌ <b>ব্যর্থ হয়েছে!</b>\nত্রুটি: ${err.message || 'Aternos এ কানেক্ট করা সম্ভব হয়নি'}`;
+      if (activeMsgId) {
+        await editMsg(chatId, activeMsgId, errMsg);
+      } else {
+        await sendMsg(chatId, errMsg);
+      }
     }
   }
 
-  // --- Stop Server (Admin Only) ---
+  // --- Stop Server (/stopserver or Button - Admin Only) ---
   else if (text === '/stopserver' || text === 'cmd_stopserver') {
     if (!isAdmin) {
       await sendMsg(chatId, "❌ <b>Permission Denied!</b> কেবল এডমিন সার্ভার স্টপ করতে পারবে।");
@@ -243,20 +272,28 @@ module.exports = async (req, res) => {
     }
 
     try {
-      const aternos = new Client();
-      await aternos.login(ATERNOS_USER, ATERNOS_PASS);
-      const servers = await aternos.getServers();
-      await servers[0].stop();
+      const server = await getAternosServer();
+      await server.stop();
 
-      await editMsg(chatId, activeMsgId, `🛑 <b>${SERVER_NAME} সার্ভারটি সফলভাবে বন্ধ করা হয়েছে!</b>`);
+      if (activeMsgId) {
+        await editMsg(chatId, activeMsgId, `🛑 <b>${SERVER_NAME} সার্ভারটি সফলভাবে বন্ধ করা হয়েছে!</b>`);
+      } else {
+        await sendMsg(chatId, `🛑 <b>${SERVER_NAME} সার্ভারটি সফলভাবে বন্ধ করা হয়েছে!</b>`);
+      }
+
       await broadcastToAll(`🛑 <b>${SERVER_NAME} Update</b>\n\nএডমিন কর্তৃক <b>${SERVER_NAME}</b> সার্ভারটি বন্ধ করা হয়েছে।`, chatId);
 
     } catch (err) {
-      await editMsg(chatId, activeMsgId, `❌ <b>স্টপ করতে সমস্যা হয়েছে:</b> ${err.message}`);
+      const errMsg = `❌ <b>স্টপ করতে সমস্যা হয়েছে:</b> ${err.message}`;
+      if (activeMsgId) {
+        await editMsg(chatId, activeMsgId, errMsg);
+      } else {
+        await sendMsg(chatId, errMsg);
+      }
     }
   }
 
-  // --- Check Status ---
+  // --- Check Status (/status or Button) ---
   else if (text === '/status' || text === 'cmd_status') {
     let activeMsgId = messageId;
     if (!isCallback) {
@@ -267,25 +304,33 @@ module.exports = async (req, res) => {
     }
 
     try {
-      const aternos = new Client();
-      await aternos.login(ATERNOS_USER, ATERNOS_PASS);
-      const servers = await aternos.getServers();
-      const status = await servers[0].getStatus();
+      const server = await getAternosServer();
+      const status = await server.getStatus();
 
-      const statusMsg = `📊 <b>${SERVER_NAME} বর্তমান স্ট্যাটাস:</b> <code>${status.toUpperCase()}</code>`;
-      await editMsg(chatId, activeMsgId, statusMsg, getMainMenu(isAdmin));
+      const statusMsg = `📊 <b>${SERVER_NAME} বর্তমান স্ট্যাটাস:</b> <code>${String(status).toUpperCase()}</code>`;
+      if (activeMsgId) {
+        await editMsg(chatId, activeMsgId, statusMsg, getMainMenu(isAdmin));
+      } else {
+        await sendMsg(chatId, statusMsg, getMainMenu(isAdmin));
+      }
 
     } catch (err) {
-      await editMsg(chatId, activeMsgId, `❌ স্ট্যাটাস চেক করা যায়নি: ${err.message}`);
+      const errMsg = `❌ স্ট্যাটাস চেক করা যায়নি: ${err.message}`;
+      if (activeMsgId) {
+        await editMsg(chatId, activeMsgId, errMsg);
+      } else {
+        await sendMsg(chatId, errMsg);
+      }
     }
   }
 
-  // --- Broadcast Prompt ---
+  // --- User Broadcast Trigger ---
   else if (text === 'cmd_user_broadcast') {
     userStates[chatId] = 'WAITING_USER_BROADCAST';
     await sendMsg(chatId, `✍️ <b>আপনি ${SERVER_NAME} এর সবাইকে কী মেসেজ পাঠাতে চান তা লিখে পাঠান:</b>\n<i>(উদাহরণ: 'আমি গেমের মধ্যে ঢুকছি, তোরা তাড়াতাড়ি আয়!')</i>`);
   }
 
+  // --- Admin Broadcast Trigger ---
   else if (text === 'cmd_admin_broadcast') {
     if (!isAdmin) return res.status(200).send('OK');
     userStates[chatId] = 'WAITING_ADMIN_BROADCAST';
