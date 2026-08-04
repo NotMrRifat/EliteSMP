@@ -1,4 +1,4 @@
-const { Client } = require('aternos-api');
+const Client = require('aternos-api');
 const fetch = require('node-fetch');
 
 // Environment Variables
