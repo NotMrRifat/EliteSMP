@@ -182,7 +182,7 @@ module.exports = async (req, res) => {
 
   // --- /start or /menu or Main Menu Button ---
   if (text === '/start' || text === '/menu' || text === 'cmd_main_menu') {
-    const msg = `👋 <b>হ্যালো ${senderName}!</b>\n<b>${SERVER_NAME}</b> কন্ট্রোল প্যানেলে স্বাগতম।\n\n👨‍💻 <b>Developer:</b> ${DEVELOPER_INFO.username}\n🌐 <b>Website:</b> ${DEVELOPER_INFO.website}\n\nনিচের বাটন বা কুইক কমান্ড ব্যবহার করে সার্ভার ম্যানেজ করুন:`;
+    const msg = `👋 <b>হ্যালো ${senderName}!</b>\n<b>${SERVER_NAME}</b> কন্ট্রোল প্যানেলে স্বাগতম।\n\n👨‍💻 <b>Developer:</b> ${DEVELOPER_INFO.username}\n\nনিচের বাটন বা কুইক কমান্ড ব্যবহার করে সার্ভার ম্যানেজ করুন:`;
     if (isCallback) {
       await editMsg(chatId, messageId, msg, getMainMenu(isAdmin));
     } else {
