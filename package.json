@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "api/bot.js",
   "dependencies": {
+    "aternos-api-wrapper": "^1.0.4",
     "node-fetch": "^2.6.7"
   }
 }
