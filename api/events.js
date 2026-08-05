@@ -1,130 +1,132 @@
 const tg = require("./lib/telegram");
 const { ADMIN_ID, ALLOWED_USERS } = require("./lib/auth");
 const logger = require("./lib/logger");
+const state = require("./lib/state");
 
-const SERVER_NAME = process.env.SERVER_NAME || "EliteSMP";
+const SERVER_NAME = process.env.SERVER_NAME || "EliteSMP Bedrock";
 const BRIDGE_KEY = process.env.MC_BRIDGE_KEY;
 
-// Deduplication cache and state tracking (persists across warm serverless instances)
-const recentEvents = new Map();
-let lastServerState = null;
-const onlinePlayersSet = new Set();
-const DUP_WINDOW_MS = 5000; // 5-second sliding deduplication window
-
-function cleanupCache() {
-  const now = Date.now();
-  for (const [key, timestamp] of recentEvents.entries()) {
-    if (now - timestamp > DUP_WINDOW_MS) {
-      recentEvents.delete(key);
-    }
-  }
+function checkAuth(req) {
+  if (!BRIDGE_KEY) return true; // If key not set in environment, allow with warning
+  const keyHeader = req.headers["x-bridge-key"] || req.query?.key;
+  return keyHeader === BRIDGE_KEY;
 }
 
 module.exports = async (req, res) => {
-  if (req.method !== "POST") {
-    return res.status(405).json({ ok: false, error: "Method Not Allowed" });
+  // CORS Headers
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Bridge-Key");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
   }
 
-  // Security Verification
-  const keyHeader = req.headers["x-bridge-key"];
-  if (BRIDGE_KEY && keyHeader !== BRIDGE_KEY) {
+  // Security Authentication Check
+  if (!checkAuth(req)) {
     logger.logAction({
       userId: "MinecraftServer",
       username: "Webhook",
       action: "EVENT_WEBHOOK",
       result: "UNAUTHORIZED",
-      details: "X-Bridge-Key mismatch",
+      details: "Invalid X-Bridge-Key header",
       level: "WARN"
     });
     return res.status(401).json({ ok: false, error: "Unauthorized: Invalid X-Bridge-Key" });
   }
 
-  try {
-    const event = req.body || {};
-    const { type, player, online, max } = event;
+  // GET /api/events?action=poll — Outbound command polling from PocketMine-MP plugin
+  if (req.method === "GET" && req.query.action === "poll") {
+    const pending = state.popPendingCommands();
+    return res.status(200).json({ ok: true, commands: pending });
+  }
 
-    if (!type) {
-      return res.status(400).json({ ok: false, error: "Missing event type" });
+  if (req.method !== "POST") {
+    return res.status(405).json({ ok: false, error: "Method Not Allowed" });
+  }
+
+  try {
+    const body = req.body || {};
+
+    // Command Result Post from PocketMine-MP plugin
+    if (body.action === "command_result") {
+      const { id, success, output } = body;
+      if (id) {
+        state.saveCommandResult(id, { success: success !== false, output: output || "Execution completed." });
+      }
+      return res.status(200).json({ ok: true });
     }
 
-    cleanupCache();
+    // Command Poll via POST
+    if (body.action === "poll") {
+      const pending = state.popPendingCommands();
+      return res.status(200).json({ ok: true, commands: pending });
+    }
 
-    // Deduplication key construction
-    const dedupKey = `${type}:${player || "server"}`;
-    const now = Date.now();
-    const lastSeen = recentEvents.get(dedupKey);
+    const { type, player, online, max, server } = body;
 
-    if (lastSeen && now - lastSeen < DUP_WINDOW_MS) {
+    if (!type) {
+      return res.status(400).json({ ok: false, error: "Missing event type parameter." });
+    }
+
+    // Deduplication check
+    if (state.isDuplicateEvent(type, player)) {
       logger.logAction({
         userId: "MinecraftServer",
         username: "Webhook",
         action: `EVENT_${type}_SKIPPED`,
         result: "DEDUPLICATED",
-        details: `Skipped duplicate event for ${dedupKey}`
+        details: `Duplicate event suppressed for ${type}:${player || "server"}`
       });
       return res.status(200).json({ ok: true, note: "Duplicate event suppressed." });
     }
 
-    // State-change / logical deduplication
-    if (type === "SERVER_ONLINE" && lastServerState === "ONLINE") {
-      return res.status(200).json({ ok: true, note: "Server already recorded as online." });
-    }
-    if (type === "SERVER_OFFLINE" && lastServerState === "OFFLINE") {
-      return res.status(200).json({ ok: true, note: "Server already recorded as offline." });
-    }
-    if (type === "PLAYER_JOIN" && player && onlinePlayersSet.has(player)) {
-      return res.status(200).json({ ok: true, note: `Player ${player} already recorded as online.` });
-    }
-    if (type === "PLAYER_QUIT" && player && !onlinePlayersSet.has(player)) {
-      // Even if player state missing, still notify if not recently sent, but update state
-    }
-
-    // Record event timestamp for sliding-window deduplication
-    recentEvents.set(dedupKey, now);
-
-    // Update tracked state
+    // State Tracking
     if (type === "SERVER_ONLINE") {
-      lastServerState = "ONLINE";
+      state.setServerState("ONLINE");
     } else if (type === "SERVER_OFFLINE") {
-      lastServerState = "OFFLINE";
-      onlinePlayersSet.clear();
+      state.setServerState("OFFLINE");
+      state.clearOnlinePlayers();
     } else if (type === "PLAYER_JOIN" && player) {
-      onlinePlayersSet.add(player);
+      state.addOnlinePlayer(player);
+      state.setServerState("ONLINE");
     } else if (type === "PLAYER_QUIT" && player) {
-      onlinePlayersSet.delete(player);
+      state.removeOnlinePlayer(player);
+      state.setServerState("ONLINE");
     }
 
     const recipients = Array.from(new Set([ADMIN_ID, ...ALLOWED_USERS])).filter(Boolean);
 
     if (recipients.length === 0) {
-      return res.status(200).json({ ok: true, note: "Event received but no Telegram recipients configured." });
+      return res.status(200).json({ ok: true, note: "Event processed, but no Telegram recipients configured." });
     }
 
+    const displayServer = server || SERVER_NAME;
     let text = "";
 
     if (type === "PLAYER_JOIN") {
       text =
-        `🟢 <b>PLAYER JOINED</b>\n` +
+        `🟢 <b>BEDROCK PLAYER JOINED</b>\n` +
         `👤 <b>${tg.esc(player || "Player")}</b>\n` +
-        `🎮 <b>${tg.esc(SERVER_NAME)}</b>\n` +
+        `🎮 <b>${tg.esc(displayServer)}</b>\n` +
         `👥 <b>Online:</b> ${online ?? 1}/${max ?? 20}`;
     } else if (type === "PLAYER_QUIT") {
       text =
-        `🔴 <b>PLAYER LEFT</b>\n` +
+        `🔴 <b>BEDROCK PLAYER LEFT</b>\n` +
         `👤 <b>${tg.esc(player || "Player")}</b>\n` +
         `👥 <b>Online:</b> ${online ?? 0}/${max ?? 20}`;
     } else if (type === "SERVER_ONLINE") {
       text =
-        `🟢 <b>${tg.esc(SERVER_NAME.toUpperCase())} IS ONLINE</b>\n` +
+        `🟢 <b>${tg.esc(displayServer.toUpperCase())} IS ONLINE</b>\n` +
         `👥 <b>Players:</b> ${online ?? 0}/${max ?? 20}`;
     } else if (type === "SERVER_OFFLINE") {
       text =
-        `🔴 <b>${tg.esc(SERVER_NAME.toUpperCase())} IS OFFLINE</b>`;
+        `🔴 <b>${tg.esc(displayServer.toUpperCase())} IS OFFLINE</b>`;
     } else if (type === "SERVER_STARTING") {
       text =
-        `🟡 <b>${tg.esc(SERVER_NAME.toUpperCase())} IS STARTING...</b>`;
+        `🟡 <b>${tg.esc(displayServer.toUpperCase())} IS STARTING...</b>`;
     } else {
-      text = `ℹ️ <b>EVENT:</b> ${tg.esc(type || "UNKNOWN")}`;
+      text = `ℹ️ <b>BEDROCK EVENT:</b> ${tg.esc(type || "UNKNOWN")}`;
     }
 
     await tg.broadcast(recipients, text);
@@ -138,7 +140,7 @@ module.exports = async (req, res) => {
 
     return res.status(200).json({ ok: true, delivered: recipients.length });
   } catch (error) {
-    console.error("Error processing event webhook:", error);
+    console.error("Error processing Bedrock event webhook:", error);
     return res.status(500).json({ ok: false, error: error.message });
   }
 };
