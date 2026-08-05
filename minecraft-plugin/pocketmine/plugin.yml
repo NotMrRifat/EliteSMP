@@ -1,0 +1,6 @@
+name: EliteTelegramBridge
+version: 1.0.0
+main: EliteTelegramBridge\Main
+api: [5.0.0, 5.1.0, 5.2.0, 5.10.0]
+author: NotMrRifat
+description: Official Bedrock Edition PocketMine-MP plugin for EliteSMP Telegram Control System & Event Webhooks

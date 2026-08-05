@@ -1,6 +1,8 @@
+const dgram = require("dgram");
+
 const BRIDGE_URL = (process.env.MC_BRIDGE_URL || "").replace(/\/+$/, "");
 const BRIDGE_KEY = process.env.MC_BRIDGE_KEY || "";
-const TIMEOUT_MS = 5000;
+const TIMEOUT_MS = 4000;
 
 async function fetchWithTimeout(url, options = {}) {
   const controller = new AbortController();
@@ -23,6 +25,63 @@ async function fetchWithTimeout(url, options = {}) {
   }
 }
 
+/**
+ * Bedrock Edition RakNet Unconnected Ping (UDP) for live server status
+ */
+function pingBedrockServer(host, port = 19132, timeoutMs = 3500) {
+  return new Promise((resolve, reject) => {
+    const client = dgram.createSocket("udp4");
+    const timer = setTimeout(() => {
+      try { client.close(); } catch (_) {}
+      reject(new Error("Bedrock server ping timeout"));
+    }, timeoutMs);
+
+    const magic = Buffer.from([
+      0x00, 0xff, 0xff, 0x00, 0xfe, 0xfe, 0xfe, 0xfe,
+      0xfd, 0xfd, 0xfd, 0xfd, 0x12, 0x34, 0x56, 0x78
+    ]);
+    const ping = Buffer.alloc(33);
+    ping.writeUInt8(0x01, 0);
+    ping.writeBigInt64BE(BigInt(Date.now()), 1);
+    magic.copy(ping, 9);
+    ping.writeBigInt64BE(BigInt(0), 25);
+
+    client.on("message", (msg) => {
+      clearTimeout(timer);
+      try { client.close(); } catch (_) {}
+      try {
+        if (msg[0] === 0x1c && msg.length >= 35) {
+          const strLength = msg.readUInt16BE(33);
+          const dataStr = msg.toString("utf8", 35, 35 + strLength);
+          const parts = dataStr.split(";");
+          resolve({
+            success: true,
+            serverName: parts[1] || process.env.SERVER_NAME || "EliteSMP Bedrock",
+            version: "Bedrock " + (parts[3] || "MCPE"),
+            online: parseInt(parts[4], 10) || 0,
+            max: parseInt(parts[5], 10) || 20,
+            motd: parts[7] || parts[1] || "Bedrock Server",
+            rawState: "ONLINE",
+            state: "🟢 ONLINE"
+          });
+        } else {
+          reject(new Error("Invalid RakNet response packet"));
+        }
+      } catch (err) {
+        reject(err);
+      }
+    });
+
+    client.on("error", (err) => {
+      clearTimeout(timer);
+      try { client.close(); } catch (_) {}
+      reject(err);
+    });
+
+    client.send(ping, 0, ping.length, port, host);
+  });
+}
+
 async function getStatus() {
   if (!BRIDGE_URL) {
     return {
@@ -30,7 +89,7 @@ async function getStatus() {
       configured: false,
       state: "⚪ UNKNOWN",
       rawState: "UNKNOWN",
-      serverName: process.env.SERVER_NAME || "EliteSMP",
+      serverName: process.env.SERVER_NAME || "EliteSMP Bedrock",
       address: "Not Configured",
       players: { online: 0, max: 0, names: [] },
       uptime: "N/A",
@@ -39,51 +98,81 @@ async function getStatus() {
     };
   }
 
-  try {
-    const res = await fetchWithTimeout(`${BRIDGE_URL}/status`);
-    if (!res.ok) {
+  // First attempt HTTP REST bridge (PocketMine / REST Adapter)
+  if (BRIDGE_URL.startsWith("http://") || BRIDGE_URL.startsWith("https://")) {
+    try {
+      const res = await fetchWithTimeout(`${BRIDGE_URL}/status`);
+      if (res.ok) {
+        const data = await res.json();
+        return {
+          success: true,
+          configured: true,
+          state: data.state || "🟢 ONLINE",
+          rawState: data.rawState || "ONLINE",
+          serverName: data.serverName || process.env.SERVER_NAME || "EliteSMP Bedrock",
+          address: data.address || BRIDGE_URL.replace(/^https?:\/\//, ""),
+          players: {
+            online: data.players?.online ?? 0,
+            max: data.players?.max ?? 20,
+            names: Array.isArray(data.players?.names) ? data.players.names : []
+          },
+          uptime: data.uptime || "Online",
+          tps: data.tps ?? "N/A",
+          version: data.version || "Bedrock Edition"
+        };
+      }
       if (res.status === 401 || res.status === 403) {
         return {
           success: false,
           configured: true,
           state: "⚪ UNKNOWN",
           rawState: "AUTH_FAILED",
-          serverName: process.env.SERVER_NAME || "EliteSMP",
+          serverName: process.env.SERVER_NAME || "EliteSMP Bedrock",
           players: { online: 0, max: 0, names: [] },
           error: "Minecraft bridge authentication failed (Invalid X-Bridge-Key)."
         };
       }
-      throw new Error(`HTTP Error ${res.status}`);
+    } catch (_) {
+      // Fallback to Bedrock UDP query if HTTP REST unavailable
     }
-    const data = await res.json();
+  }
+
+  // Extract host and port for Bedrock RakNet UDP Ping fallback
+  try {
+    const cleanAddr = BRIDGE_URL.replace(/^https?:\/\//, "");
+    const parts = cleanAddr.split(":");
+    const host = parts[0];
+    const port = parts[1] ? parseInt(parts[1], 10) : 19132;
+
+    const bedrockData = await pingBedrockServer(host, port);
     return {
       success: true,
       configured: true,
-      state: data.state || "🟢 ONLINE",
-      rawState: data.rawState || "ONLINE",
-      serverName: data.serverName || process.env.SERVER_NAME || "EliteSMP",
-      address: data.address || BRIDGE_URL.replace(/^https?:\/\//, ""),
+      state: bedrockData.state,
+      rawState: bedrockData.rawState,
+      serverName: bedrockData.serverName,
+      address: `${host}:${port}`,
       players: {
-        online: data.players?.online ?? 0,
-        max: data.players?.max ?? 20,
-        names: Array.isArray(data.players?.names) ? data.players.names : []
+        online: bedrockData.online,
+        max: bedrockData.max,
+        names: [] // Names are N/A in standard RakNet ping payload
       },
-      uptime: data.uptime || "Online",
-      tps: data.tps ?? 20.0,
-      version: data.version || "Paper Minecraft"
+      uptime: "N/A",
+      tps: "N/A",
+      version: bedrockData.version
     };
-  } catch (err) {
+  } catch (pingErr) {
     return {
       success: false,
       configured: true,
       state: "🔴 OFFLINE",
       rawState: "OFFLINE",
-      serverName: process.env.SERVER_NAME || "EliteSMP",
+      serverName: process.env.SERVER_NAME || "EliteSMP Bedrock",
       address: BRIDGE_URL.replace(/^https?:\/\//, ""),
       players: { online: 0, max: 0, names: [] },
       uptime: "Offline",
-      tps: 0,
-      error: `Bridge unavailable: ${err.message}`
+      tps: "N/A",
+      error: `Bedrock server unavailable: ${pingErr.message}`
     };
   }
 }
@@ -121,12 +210,12 @@ async function executeCommand(command) {
       if (res.status === 401 || res.status === 403) {
         throw new Error("Bridge authentication failed (Unauthorized X-Bridge-Key).");
       }
-      throw new Error(`Minecraft bridge returned HTTP status ${res.status}`);
+      throw new Error(`Bedrock bridge returned HTTP status ${res.status}`);
     }
 
     const data = await res.json();
     if (data.ok === false) {
-      throw new Error(data.error || "Command execution failed on Minecraft server.");
+      throw new Error(data.error || "Command execution failed on Bedrock server.");
     }
 
     return {
@@ -157,7 +246,7 @@ async function sendAnnouncement(message) {
       if (res.status === 401 || res.status === 403) {
         throw new Error("Bridge authentication failed (Unauthorized X-Bridge-Key).");
       }
-      throw new Error(`Minecraft bridge returned HTTP status ${res.status}`);
+      throw new Error(`Bedrock bridge returned HTTP status ${res.status}`);
     }
 
     const data = await res.json();
@@ -167,7 +256,7 @@ async function sendAnnouncement(message) {
       response: data.message || "Announcement delivered."
     };
   } catch (err) {
-    throw new Error(`Minecraft bridge unavailable. ${err.message}`);
+    throw new Error(`Bedrock bridge unavailable. ${err.message}`);
   }
 }
 

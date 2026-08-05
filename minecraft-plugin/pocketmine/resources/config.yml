@@ -1,0 +1,19 @@
+# EliteTelegramBridge Bedrock (PocketMine-MP) Configuration
+
+# Secret key required in the X-Bridge-Key header for incoming REST requests
+# MUST MATCH the MC_BRIDGE_KEY environment variable set on Vercel!
+bridge-key: "change_me_to_your_secure_bridge_key"
+
+# Vercel Webhook URL for dispatching real-time player/server events to Telegram
+# (Vercel Hobby compatible — replaces 5-minute cron polling with event-driven webhooks)
+vercel-events-url: "https://elitesmp.vercel.app/api/events"
+
+# Enable/disable sending player join/leave & server status events to Vercel
+enable-event-webhooks: true
+
+# Server name display
+server-name: "EliteSMP Bedrock"
+
+# Port for optional embedded HTTP REST server (if port-forwarded)
+port: 8080
+enable-rest-api: true

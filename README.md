@@ -1,12 +1,16 @@
-# 🏰 EliteSMP — Production-Ready Telegram ↔ Minecraft Control System
+# 🏰 EliteSMP — Production-Ready Bedrock Edition Telegram Control System
 
-A high-performance, secure, VPS-free Telegram control bot, real-time event dispatcher, and live web control center for **EliteSMP Minecraft Server**.
+A high-performance, secure, VPS-free Telegram control bot, real-time event dispatcher, and live web control center built specifically for **Minecraft Bedrock Edition** (Aternos PocketMine-MP / Bedrock Dedicated Server / Geyser).
 
-Built for **Vercel Serverless Functions (Node.js 22)** on the **Vercel Hobby Plan** and **Paper/Spigot Minecraft servers**, utilizing Telegram Webhooks and an event-driven Paper plugin.
+Built for **Vercel Serverless Functions (Node.js 22)** on the **Vercel Hobby Plan**, utilizing Telegram Webhooks, RakNet Bedrock UDP status pinging, and an event-driven PocketMine-MP plugin.
+
+> [!IMPORTANT]
+> **Bedrock Edition Notice**
+> Paper/Spigot Java `.jar` plugins **cannot** run on Bedrock Edition servers. This repository provides an official **PocketMine-MP PHP plugin** (`minecraft-plugin/pocketmine/`) for Bedrock servers on Aternos, plus RakNet UDP pinging for on-demand Bedrock status queries (`/status`).
 
 ---
 
-## 🎯 Architecture Diagram
+## 🎯 Bedrock Architecture Diagram
 
 ```text
  Telegram User 
@@ -18,12 +22,12 @@ Vercel Serverless Platform (100% Vercel Hobby Plan Compatible)
   ├── /api/events (Authenticated event-driven receiver with deduplication)
   └── /api/cron (Once-daily Hobby maintenance check: "0 0 * * *")
        │                                     ▲
-       │ (On-Demand Live REST Calls)        │ (Real-Time Webhook Push)
+       │ (RakNet UDP Ping or HTTP REST)      │ (Real-Time Webhook Push)
        ▼                                     │
-EliteSMP Minecraft Server (EliteTelegramBridge Paper Plugin)
-  ├── GET  /status   ➔ Real server status, player names, TPS & uptime
+Aternos Bedrock Server (PocketMine-MP PHP Plugin: EliteTelegramBridge)
+  ├── GET  /status   ➔ Real Bedrock status, player names, TPS & uptime
   ├── GET  /players  ➔ Real-time list of online players
-  ├── POST /command  ➔ Safely execute Minecraft console commands
+  ├── POST /command  ➔ Safely execute console commands
   ├── POST /say      ➔ Deliver in-game Telegram announcements
   └── Event Listeners (PlayerJoinEvent, PlayerQuitEvent, Lifecycle)
         └── Sends authenticated POST with X-Bridge-Key to /api/events
@@ -33,12 +37,13 @@ EliteSMP Minecraft Server (EliteTelegramBridge Paper Plugin)
 
 ## ✨ Features
 
-- 🚀 **100% Vercel Hobby Compatible**: Zero VPS required. Replaces frequent Vercel Cron polling with event-driven webhooks.
-- 📊 **Real Live Server Status**: Displays genuine Minecraft server metrics (Status, Player count, Player names list, Server address, Uptime, TPS). On-demand live lookup (`/status`).
-- 👥 **Real Player Lookup**: Instant `/players` lookup displaying active player usernames.
-- ⚡ **Secure Admin Command Runner**: Executing `/cmd <minecraft command>` safely on the server console (Admin only).
+- 🚀 **100% Vercel Hobby & VPS-Free**: Zero VPS required. Replaces frequent Vercel Cron polling with event-driven webhooks.
+- 🧱 **Native Bedrock Edition Support**: Native PocketMine-MP PHP plugin (`minecraft-plugin/pocketmine/`) plus RakNet UDP status pinging for Bedrock servers (`play.elitesmp.com:19132`).
+- 📊 **Real Live Server Status**: Genuine Bedrock metrics (Status, Player count, Max players, Version, MOTD). On-demand live query (`/status`).
+- 👥 **Real Player Lookup**: Instant `/players` lookup displaying active Bedrock player usernames.
+- ⚡ **Secure Admin Command Runner**: Executing `/cmd <command>` safely on the Bedrock console (Admin only).
 - 📢 **In-Game Telegram Announcements**: Broadcast messages in-game via `/announce <message>`.
-- 🔔 **Event-Driven Real-Time Alerts**: Paper plugin event listeners (`PlayerJoinEvent`, `PlayerQuitEvent`, server enable/disable) push real-time notifications to `/api/events`.
+- 🔔 **Event-Driven Real-Time Alerts**: PocketMine-MP event listeners (`PlayerJoinEvent`, `PlayerQuitEvent`, server enable/disable) push real-time notifications to `/api/events`.
 - 🛡️ **Deduplication & State Protection**: Sliding-window deduplication and state tracking in `/api/events` and plugin to prevent duplicate Telegram alerts.
 - 🔑 **Strict Authentication**: `/api/events` and REST API require matching `MC_BRIDGE_KEY` (`X-Bridge-Key`). Bot access protected via `ADMIN_ID` and `ALLOWED_USERS`.
 - 🌐 **Modern Web Control Panel**: Glassmorphism web dashboard (`/public`) with live metrics, player list, announcement trigger, console runner, and audit activity log.
@@ -58,21 +63,17 @@ EliteSMP/
 │   └── lib/
 │       ├── aternos.js    # Aternos server adapter boundary
 │       ├── auth.js       # Telegram admin & allowed user authentication
-│       ├── bridgeClient.js # Secure HTTP client for Minecraft bridge
+│       ├── bridgeClient.js # RakNet UDP Ping & HTTP client for Bedrock bridge
 │       ├── logger.js     # Privacy-filtered audit logger
 │       └── telegram.js   # Resilient Telegram API wrapper
 ├── minecraft-plugin/
-│   ├── build.gradle      # Paper plugin Gradle build script (Java 17)
-│   ├── settings.gradle   # Gradle project settings
-│   └── src/
-│       └── main/
-│           ├── java/eu/elitesmp/telegrambridge/
-│           │   ├── EliteTelegramBridge.java # Main plugin class
-│           │   ├── HttpBridgeServer.java    # Embedded HTTP REST server
-│           │   └── EventListener.java       # Player Join/Quit event listener
-│           └── resources/
-│               ├── config.yml # Plugin port, bridge key, & webhook config
-│               └── plugin.yml # Paper plugin metadata
+│   ├── pocketmine/       # PRIMARY: Official PocketMine-MP PHP Plugin (Bedrock)
+│   │   ├── plugin.yml    # PocketMine-MP plugin metadata
+│   │   ├── resources/
+│   │   │   └── config.yml # Bridge port, secret key, & Vercel webhook URL
+│   │   └── src/EliteTelegramBridge/
+│   │       └── Main.php  # Main Bedrock event listener & REST API server
+│   └── java-paper/       # OPTIONAL: Paper/Spigot Java Edition plugin
 ├── public/               # Web Control Panel Frontend
 │   ├── index.html        # Glassmorphism HTML dashboard
 │   ├── style.css         # Modern dark theme styles
@@ -85,7 +86,7 @@ EliteSMP/
 
 ---
 
-## 🚀 Deployment & Redeployment Guide
+## 🚀 Deployment Guide
 
 ### 1. Configure Telegram Bot Father
 1. Open Telegram and message [@BotFather](https://t.me/BotFather).
@@ -102,40 +103,44 @@ EliteSMP/
    ```
 
 ### 2. Deploy to Vercel (Hobby Compatible)
-1. Push these updated changes to your **GitHub** repository.
-2. If already deployed, Vercel will automatically trigger a new build.
-3. Verify your **Environment Variables** in Vercel Project Settings:
+1. Push this repository to your **GitHub** account.
+2. Log into [Vercel](https://vercel.com/) and click **Add New Project**.
+3. Import your `EliteSMP` repository.
+4. Add the following **Environment Variables** in Vercel Project Settings:
 
 | Environment Variable | Description | Example Value |
 |---|---|---|
 | `TELEGRAM_TOKEN` | Bot Token from BotFather | `123456789:ABCdefGHI...` |
 | `ADMIN_ID` | Telegram User ID (Primary Admin) | `12345678` |
 | `ALLOWED_USERS` | Comma-separated allowed Telegram User IDs | `12345678,87654321` |
-| `SERVER_NAME` | Name of your Minecraft server | `EliteSMP` |
-| `MC_BRIDGE_URL` | Full URL of your Minecraft Bridge HTTP server | `https://play.elitesmp.com:8080` |
+| `SERVER_NAME` | Name of your Bedrock server | `EliteSMP Bedrock` |
+| `MC_BRIDGE_URL` | PocketMine REST URL (or Bedrock IP:Port) | `https://play.elitesmp.com:8080` |
 | `MC_BRIDGE_KEY` | Secret passkey matching `config.yml` (`bridge-key`) | `my_secure_secret_key_123` |
 | `WEB_ADMIN_KEY` | Secret passkey for Web Control Panel | `my_web_admin_passkey` |
 | `DEVELOPER_USERNAME` | Developer contact handle | `@NotMrRifat` |
 
-### 3. Build & Update Minecraft Plugin (`EliteTelegramBridge`)
+5. Click **Deploy**. Note your deployment domain (e.g., `https://elitesmp.vercel.app`).
 
-1. **Build the Updated Plugin**:
-   ```bash
-   cd minecraft-plugin
-   ./gradlew build   # (or gradlew.bat build on Windows)
+### 3. Set Telegram Webhook
+Open the following URL in your browser (replace `<TELEGRAM_TOKEN>` and `<VERCEL_URL>`):
+
+```text
+https://api.telegram.org/bot<TELEGRAM_TOKEN>/setWebhook?url=https://<VERCEL_URL>/api/bot
+```
+
+---
+
+## 🔌 Installing Bedrock Plugin on Aternos (PocketMine-MP)
+
+1. Open your Aternos server files directory (`plugins/`).
+2. Copy the `minecraft-plugin/pocketmine` directory into `plugins/EliteTelegramBridge`.
+3. Configure `plugins/EliteTelegramBridge/resources/config.yml`:
+   ```yaml
+   bridge-key: "my_secure_secret_key_123"  # MUST MATCH MC_BRIDGE_KEY in Vercel!
+   vercel-events-url: "https://<YOUR_VERCEL_APP>.vercel.app/api/events"
+   enable-event-webhooks: true
    ```
-   The compiled JAR will be saved in `minecraft-plugin/build/libs/EliteTelegramBridge-1.0.0.jar`.
-
-2. **Deploy to Minecraft Server**:
-   - Upload `EliteTelegramBridge-1.0.0.jar` into your Minecraft server's `plugins/` directory.
-   - Configure `plugins/EliteTelegramBridge/config.yml`:
-     ```yaml
-     port: 8080
-     bridge-key: "my_secure_secret_key_123"  # MUST MATCH MC_BRIDGE_KEY in Vercel!
-     vercel-events-url: "https://<YOUR_VERCEL_APP>.vercel.app/api/events"
-     enable-event-webhooks: true
-     ```
-   - Restart the Minecraft server or reload the plugin.
+4. Restart your Aternos PocketMine-MP server.
 
 ---
 
@@ -144,7 +149,7 @@ EliteSMP/
 This repository is designed to be hosted **PUBLICLY** on GitHub.
 
 - **NEVER Commit Secrets**: The `.gitignore` file strictly blocks `.env`, `.env.local`, and build artifacts.
-- **Header Authentication**: All Vercel ↔ Minecraft communications require a matching `X-Bridge-Key` header (`MC_BRIDGE_KEY`).
+- **Header Authentication**: All Vercel ↔ Bedrock communications require a matching `X-Bridge-Key` header (`MC_BRIDGE_KEY`).
 - **Deduplication Safeguards**: Sliding window cache prevents event flooding or duplicate Telegram alerts.
 - **Privacy Sanitization**: Audit logs automatically redact tokens, bridge keys, and sensitive credentials before output.
 
@@ -154,11 +159,10 @@ This repository is designed to be hosted **PUBLICLY** on GitHub.
 
 | Issue | Cause | Solution |
 |---|---|---|
+| **Java Plugin Upload Error on Bedrock** | Uploaded `.jar` to Bedrock server | Do NOT upload `.jar` files to Bedrock. Install the PocketMine-MP PHP plugin in `minecraft-plugin/pocketmine/`. |
 | **Vercel Deployment Error (Cron limit exceeded)** | Cron schedule set to sub-daily frequency | Ensure `vercel.json` uses `"0 0 * * *"` (once daily) for Vercel Hobby compatibility. |
 | **Telegram webhook not responding** | Invalid `TELEGRAM_TOKEN` or webhook URL not set | Re-run the `setWebhook` URL in your browser and check Vercel function logs for `/api/bot`. |
-| **Bridge unavailable / 🔴 OFFLINE** | Port closed, wrong IP, or server stopped | Ensure your server's bridge port (e.g., `8080`) is port-forwarded and accessible from Vercel. |
-| **Events rejected with HTTP 401** | `MC_BRIDGE_KEY` mismatch | Ensure `MC_BRIDGE_KEY` in Vercel matches `bridge-key` in `plugins/EliteTelegramBridge/config.yml`. |
-| **Duplicate Telegram notifications** | Duplicate event firing | System features sliding-window deduplication (5s window). Ensure plugin `config.yml` is correctly loaded. |
+| **Events rejected with HTTP 401** | `MC_BRIDGE_KEY` mismatch | Ensure `MC_BRIDGE_KEY` in Vercel matches `bridge-key` in `plugins/EliteTelegramBridge/resources/config.yml`. |
 
 ---
 
