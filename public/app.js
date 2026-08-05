@@ -60,7 +60,7 @@ document.addEventListener("DOMContentLoaded", () => {
     metricPlayers.textContent = `${online}/${max}`;
     metricAddress.textContent = data.address || "play.elitesmp.com";
     metricUptime.textContent = data.uptime || "Offline";
-    metricTps.textContent = data.tps ?? "20.0";
+    metricTps.textContent = data.version || "Bedrock Edition";
 
     playerCountBadge.textContent = `${online} Online`;
 

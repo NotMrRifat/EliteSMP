@@ -1,11 +1,10 @@
 /*
  * Aternos / Minecraft Server Adapter Layer
  *
- * Provides a clean interface for querying server status, online players,
- * executing admin commands, and sending announcements.
+ * Provides a clean interface for querying live Bedrock server status and player count.
  *
- * Note: Aternos does not offer an official serverless-compatible API for automatic start/stop.
- * As per policy, fake success messages are never returned.
+ * Note: Free Aternos does not offer an official API for remote server start/stop/restart,
+ * and restricts RCON ports and custom PHP plugins.
  */
 
 const bridgeClient = require("./bridgeClient");
@@ -20,37 +19,29 @@ async function players() {
 
 async function start() {
   const err = new Error(
-    "⚠️ Aternos Start/Stop is unavailable through the current serverless architecture. " +
-    "Please start the server directly via Aternos Web UI or configured auto-start plugin."
+    "⚠️ Remote server start is unavailable on Free Aternos.\n" +
+    "Please start your server directly via the official Aternos Web UI (https://aternos.org/server/)."
   );
-  err.code = "ATERNOS_CONTROL_UNAVAILABLE";
+  err.code = "ATERNOS_FREE_LIMITATION";
   throw err;
 }
 
 async function stop() {
-  // If bridge is connected, an admin can issue stop command via bridge safely
-  try {
-    return await bridgeClient.executeCommand("stop");
-  } catch {
-    const err = new Error(
-      "⚠️ Remote server stop command failed or bridge is unavailable. " +
-      "Please stop the server via Aternos Web UI."
-    );
-    err.code = "SERVER_STOP_UNAVAILABLE";
-    throw err;
-  }
+  const err = new Error(
+    "⚠️ Remote server stop is unavailable on Free Aternos.\n" +
+    "Aternos Free restricts RCON ports and custom PHP plugin execution. Stop the server via Aternos Web UI."
+  );
+  err.code = "ATERNOS_FREE_LIMITATION";
+  throw err;
 }
 
 async function restart() {
-  try {
-    return await bridgeClient.executeCommand("restart");
-  } catch {
-    const err = new Error(
-      "⚠️ Remote server restart command failed or bridge is unavailable."
-    );
-    err.code = "SERVER_RESTART_UNAVAILABLE";
-    throw err;
-  }
+  const err = new Error(
+    "⚠️ Remote server restart is unavailable on Free Aternos.\n" +
+    "Aternos Free restricts RCON ports and custom PHP plugin execution. Restart the server via Aternos Web UI."
+  );
+  err.code = "ATERNOS_FREE_LIMITATION";
+  throw err;
 }
 
 module.exports = {
@@ -60,3 +51,4 @@ module.exports = {
   stop,
   restart
 };
+

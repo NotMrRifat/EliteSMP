@@ -66,18 +66,37 @@ async function renderDashboard(name, statusData) {
 }
 
 async function renderStatus(statusData) {
-  const stateBadge = statusData.state || "⚪ UNKNOWN";
+  const isOnline = statusData.rawState === "ONLINE" || (statusData.state && statusData.state.includes("ONLINE"));
+  const addr = statusData.address || "play.elitesmp.com";
+
+  if (!isOnline) {
+    let offlineText =
+      `📊 <b>LIVE SERVER STATUS</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `🎮 <b>Server:</b> ${tg.esc(SERVER_NAME)}\n` +
+      `📡 <b>Status:</b> 🔴 OFFLINE\n` +
+      `👥 <b>Players:</b> 0/0\n` +
+      `🌐 <b>Address:</b> <code>${tg.esc(addr)}</code>\n` +
+      `⏱ <b>Uptime:</b> Offline`;
+
+    if (statusData.error) {
+      offlineText += `\n\n⚠️ <b>Notice:</b> <code>${tg.esc(statusData.error)}</code>`;
+    }
+    return offlineText;
+  }
+
   const online = statusData.players?.online ?? 0;
   const max = statusData.players?.max ?? 20;
   const names = statusData.players?.names || [];
-  const addr = statusData.address || "play.elitesmp.com";
-  const uptime = statusData.uptime || "N/A";
+  const uptime = statusData.uptime || "Unknown";
+  const version = statusData.version || "Bedrock Edition";
+  const motd = statusData.motd || SERVER_NAME;
 
   let playerListText = "";
   if (names.length > 0) {
     playerListText = names.map(n => `  • ${tg.esc(n)}`).join("\n");
   } else if (online > 0) {
-    playerListText = `  • ${online} player(s) active`;
+    playerListText = `  • ${online} player(s) active in-game`;
   } else {
     playerListText = "  • No players online";
   }
@@ -86,36 +105,51 @@ async function renderStatus(statusData) {
     `📊 <b>LIVE SERVER STATUS</b>\n` +
     `━━━━━━━━━━━━━━━━━━━━\n` +
     `🎮 <b>Server:</b> ${tg.esc(SERVER_NAME)}\n` +
-    `📡 <b>Status:</b> ${stateBadge}\n` +
+    `📡 <b>Status:</b> 🟢 ONLINE\n` +
     `👥 <b>Players:</b> ${online}/${max}\n` +
     `👤 <b>Online Players:</b>\n${playerListText}\n` +
     `🌐 <b>Address:</b> <code>${tg.esc(addr)}</code>\n` +
+    `🧱 <b>Version:</b> ${tg.esc(version)}\n` +
+    `📝 <b>MOTD:</b> ${tg.esc(motd)}\n` +
     `⏱ <b>Uptime:</b> ${tg.esc(uptime)}`;
-
-  if (statusData.error) {
-    text += `\n\n⚠️ <b>Notice:</b> <code>${tg.esc(statusData.error)}</code>`;
-  }
 
   return text;
 }
 
 async function renderPlayers(playersData) {
+  const isOnline = playersData.rawState === "ONLINE" || (playersData.state && playersData.state.includes("ONLINE"));
   const online = playersData.players?.online ?? 0;
   const names = playersData.players?.names || [];
 
-  if (online === 0 || names.length === 0) {
+  if (!isOnline) {
     return (
       `👥 <b>ONLINE PLAYERS</b>\n` +
       `━━━━━━━━━━━━━━━━━━━━\n` +
-      `No players are currently online.`
+      `🔴 Server is currently OFFLINE.`
     );
   }
 
-  const list = names.map((name, idx) => `${idx + 1}. <b>${tg.esc(name)}</b>`).join("\n");
+  if (online === 0) {
+    return (
+      `👥 <b>ONLINE PLAYERS — 0</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `🟢 Server is online, but no players are currently in-game.`
+    );
+  }
+
+  if (names.length > 0) {
+    const list = names.map((name, idx) => `${idx + 1}. <b>${tg.esc(name)}</b>`).join("\n");
+    return (
+      `👥 <b>ONLINE PLAYERS — ${online}</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `${list}`
+    );
+  }
+
   return (
     `👥 <b>ONLINE PLAYERS — ${online}</b>\n` +
     `━━━━━━━━━━━━━━━━━━━━\n` +
-    `${list}`
+    `🟢 ${online} player(s) currently active on server.`
   );
 }
 
@@ -191,16 +225,15 @@ module.exports = async (req, res) => {
         `<b>User Commands:</b>\n` +
         `• <code>/start</code> - Open main dashboard\n` +
         `• <code>/menu</code> - Show main control menu\n` +
-        `• <code>/status</code> - View real live server status\n` +
-        `• <code>/players</code> - View list of online players\n` +
-        `• <code>/server</code> - View server IP & specifications\n` +
+        `• <code>/status</code> - View real-time Bedrock RakNet status\n` +
+        `• <code>/players</code> - View online player count\n` +
+        `• <code>/server</code> - View server IP & details\n` +
         `• <code>/help</code> - Show command overview\n\n` +
-        `<b>Admin Commands:</b>\n` +
+        `<b>Admin Commands (Free Aternos Info):</b>\n` +
         `• <code>/admin</code> - Open admin control panel\n` +
-        `• <code>/announce &lt;msg&gt;</code> - Broadcast in-game chat announcement\n` +
-        `• <code>/cmd &lt;command&gt;</code> - Run console command on Minecraft server\n` +
-        `• <code>/restart</code> - Restart Minecraft server\n` +
-        `• <code>/logs</code> - View system activity audit log`;
+        `• <code>/logs</code> - View system activity log\n` +
+        `• <code>/announce</code> - Platform notice for broadcasts\n` +
+        `• <code>/cmd</code> - Platform notice for console commands`;
 
       if (cb) await tg.edit(chatId, cb.message.message_id, helpText, mainMenu(admin));
       else await tg.send(chatId, helpText, mainMenu(admin));
@@ -215,7 +248,7 @@ module.exports = async (req, res) => {
         `Developer: ${tg.esc(DEV)}\n` +
         `GitHub: <a href="https://github.com/NotMrRifat/EliteSMP">NotMrRifat/EliteSMP</a>\n` +
         `Live Web: <a href="https://elitesmp.vercel.app/">elitesmp.vercel.app</a>\n\n` +
-        `Public repository compliant with zero hardcoded credentials.`;
+        `Public repository compliant with zero hardcoded credentials & Free Aternos compatible.`;
 
       if (cb) await tg.edit(chatId, cb.message.message_id, text, mainMenu(admin));
       else await tg.send(chatId, text, mainMenu(admin));
@@ -232,7 +265,7 @@ module.exports = async (req, res) => {
         `👥 <b>Players:</b> ${statusData.players?.online || 0}/${statusData.players?.max || 20}\n` +
         `🌐 <b>Address:</b> <code>${tg.esc(statusData.address || "play.elitesmp.com")}</code>\n` +
         `⏱ <b>Uptime:</b> ${tg.esc(statusData.uptime || "N/A")}\n` +
-        `⚡ <b>TPS:</b> ${statusData.tps ?? "20.0"}`;
+        `⚡ <b>Platform:</b> Bedrock Edition (Free Aternos)`;
 
       if (cb) await tg.edit(chatId, cb.message.message_id, text, mainMenu(admin));
       else await tg.send(chatId, text, mainMenu(admin));
@@ -248,9 +281,9 @@ module.exports = async (req, res) => {
         `⚙️ <b>ADMIN CONTROL PANEL</b>\n` +
         `━━━━━━━━━━━━━━━━━━━━\n` +
         `Authorized Admin: <b>${tg.esc(name)}</b>\n\n` +
-        `Select an administrative action below or use admin commands:\n` +
-        `• <code>/announce &lt;message&gt;</code>\n` +
-        `• <code>/cmd &lt;minecraft command&gt;</code>`;
+        `ℹ️ <b>Free Aternos Platform Notice:</b>\n` +
+        `Aternos Free restricts remote plugin/RCON controls and requires starting/stopping via <a href="https://aternos.org/server/">aternos.org</a>.\n\n` +
+        `• <code>/logs</code> - View system activity audit log`;
 
       if (cb) await tg.edit(chatId, cb.message.message_id, text, adminMenu());
       else await tg.send(chatId, text, adminMenu());
